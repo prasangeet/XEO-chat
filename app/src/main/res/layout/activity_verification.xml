@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".auth.VerificationActivity"
+    android:background="@color/primary">
+    <RelativeLayout
+        android:id="@+id/titleVerify"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="30dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:text="Verification"
+            android:textColor="@color/white_60"
+            android:textSize="24dp"
+            android:layout_margin="8dp"/>
+    </RelativeLayout>
+    <ImageView
+        android:id="@+id/backBtn"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_alignTop="@id/titleVerify"
+        android:layout_alignStart="@id/titleVerify"
+        android:src="@drawable/go_back_icon"/>
+
+    <RelativeLayout
+        android:id="@+id/mainLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="30dp"
+        android:layout_marginEnd="30dp"
+        android:layout_centerVertical="true"
+        android:layout_centerHorizontal="true">
+        <ImageView
+            android:id="@+id/imageMain"
+            android:layout_width="wrap_content"
+            android:layout_height="300dp"
+            android:src="@drawable/img_1"/>
+        <TextView
+            android:id="@+id/almostthere"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/imageMain"
+            android:text="Almost There"
+            android:layout_centerHorizontal="true"
+            android:textSize="40sp"
+            android:textColor="@color/white_60"/>
+        <TextView
+            android:id="@+id/verifyText"
+            android:layout_width="300dp"
+            android:textAlignment="center"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/almostthere"
+            android:text="Check your email for verification and click the link to verify"
+            android:layout_centerHorizontal="true"
+            android:textSize="20sp"
+            android:textColor="@color/white_60"/>
+        <TextView
+            android:id="@+id/Refreshbtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/verifyText"
+            android:layout_marginTop="30dp"
+            android:text="Check Verification"
+            android:layout_centerHorizontal="true"
+            android:textSize="25sp"
+            android:textColor="@color/white"/>
+        <LinearLayout
+            android:id="@+id/resendLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_below="@id/Refreshbtn"
+            android:layout_marginTop="30dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Didn't receive link? "
+                android:textColor="@color/white_60"
+                android:textSize="18sp"/>
+            <TextView
+                android:id="@+id/resendBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Resend! "
+                android:textColor="@color/white"
+                android:clickable="true"
+                android:textSize="18sp"/>
+            <TextView
+                android:id="@+id/countDown"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="()"
+                android:textSize="18dp"
+                android:textColor="@color/white_60"/>
+        </LinearLayout>
+
+    </RelativeLayout>
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_below="@id/mainLayout"
+        android:layout_marginTop="10dp"
+        android:visibility="gone"/>
+
+</RelativeLayout>

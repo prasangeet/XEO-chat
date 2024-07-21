@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1021093338559",
+    "project_id": "xeochat-e98fb",
+    "storage_bucket": "xeochat-e98fb.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1021093338559:android:10e2f94f28a69205e3550a",
+        "android_client_info": {
+          "package_name": "com.xenapps.xenchat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxjjPKx_PqFd_TwXvASJdXood1U_tisBg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
