@@ -2,7 +2,10 @@ package com.xenapps.xenchat
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -10,6 +13,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CircleCrop
 import com.google.firebase.auth.FirebaseAuth
@@ -19,6 +23,7 @@ import com.google.firebase.firestore.ktx.toObject
 import com.xenapps.xenchat.classes.User
 import com.xenapps.xenchat.classes.UserAdapter
 import com.xenapps.xenchat.utils.EncryptionUtils
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -29,27 +34,34 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var nothingFoundLayout: RelativeLayout
     private lateinit var userAdapter: UserAdapter
+    private lateinit var searchEditText: EditText
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private val userList = mutableListOf<User>()
+    private val filteredUserList = mutableListOf<User>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        initials()
+        initializeViews()
         loadCurrentUser()
         setupUserListener()
+        setupSearchView()
+        setupSwipeRefresh()
     }
 
-    private fun initials() {
+    private fun initializeViews() {
         profileImageView = findViewById(R.id.profilePic)
         usernameTextView = findViewById(R.id.username)
         firestore = FirebaseFirestore.getInstance()
         auth = FirebaseAuth.getInstance()
         recyclerView = findViewById(R.id.recyclerView)
         nothingFoundLayout = findViewById(R.id.nothingFound)
+        searchEditText = findViewById(R.id.searchUsers)
+        swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        userAdapter = UserAdapter(userList) { user ->
+        userAdapter = UserAdapter(filteredUserList) { user ->
             val intent = Intent(this, ChatActivity::class.java)
             intent.putExtra("USER_UID", user.uid)
             startActivity(intent)
@@ -84,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         firestore.collection("users").addSnapshotListener { snapshots, exception ->
             if (exception != null) {
                 Toast.makeText(this, "Failed to Load Users: ${exception.message}", Toast.LENGTH_SHORT).show()
+                swipeRefreshLayout.isRefreshing = false
                 return@addSnapshotListener
             }
 
@@ -95,8 +108,7 @@ class MainActivity : AppCompatActivity() {
                     loadLastMessage(user)
                 }
             }
-            userAdapter.notifyDataSetChanged()
-            nothingFoundLayout.visibility = if (userList.isEmpty()) View.VISIBLE else View.GONE
+            filterUsers(searchEditText.text.toString())
         }
     }
 
@@ -133,8 +145,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     userList.add(user)
                 }
-                userAdapter.notifyDataSetChanged()
-                nothingFoundLayout.visibility = if (userList.isEmpty()) View.VISIBLE else View.GONE
+                filterUsers(searchEditText.text.toString())
             }
     }
 
@@ -144,5 +155,40 @@ class MainActivity : AppCompatActivity() {
         } else {
             "$otherUserId-$currentUserId"
         }
+    }
+
+    private fun setupSearchView() {
+        searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                filterUsers(s.toString())
+            }
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+    }
+
+    private fun setupSwipeRefresh() {
+        swipeRefreshLayout.setOnRefreshListener {
+            filterUsers(searchEditText.text.toString())
+            swipeRefreshLayout.isRefreshing = false
+        }
+    }
+
+    private fun filterUsers(query: String) {
+        val lowercaseQuery = query.lowercase(Locale.getDefault())
+        filteredUserList.clear()
+        if (lowercaseQuery.isEmpty()) {
+            filteredUserList.addAll(userList)
+        } else {
+            for (user in userList) {
+                if (user.username.lowercase(Locale.getDefault()).contains(lowercaseQuery)) {
+                    filteredUserList.add(user)
+                }
+            }
+        }
+        userAdapter.notifyDataSetChanged()
+        nothingFoundLayout.visibility = if (filteredUserList.isEmpty()) View.VISIBLE else View.GONE
     }
 }
