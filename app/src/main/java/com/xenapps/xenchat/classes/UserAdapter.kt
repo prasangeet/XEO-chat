@@ -15,12 +15,6 @@ class UserAdapter(
     private val onUserClick: (User) -> Unit
 ) : RecyclerView.Adapter<UserAdapter.UserViewHolder>() {
 
-    inner class UserViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val profilePic: ImageView = itemView.findViewById(R.id.chatProfilePic)
-        val username: TextView = itemView.findViewById(R.id.chatUsername)
-        val lastMessage: TextView = itemView.findViewById(R.id.chatLastMessage) // Optional, if you plan to use it
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_user, parent, false)
         return UserViewHolder(view)
@@ -28,21 +22,37 @@ class UserAdapter(
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
         val user = userList[position]
-
-        holder.username.text = user.username
-        holder.lastMessage.text = user.lastMessage
-
-        if (user.avatarUrl?.isNotEmpty() == true) {
-            Glide.with(holder.itemView.context)
-                .load(user.avatarUrl)
-                .transform(CircleCrop())
-                .into(holder.profilePic)
-        }
-
-        holder.itemView.setOnClickListener {
-            onUserClick(user)
-        }
+        holder.bind(user)
+        holder.itemView.setOnClickListener { onUserClick(user) }
     }
 
-    override fun getItemCount() = userList.size
+    override fun getItemCount(): Int = userList.size
+
+    inner class UserViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val chatProfilePic: ImageView = itemView.findViewById(R.id.chatProfilePic)
+        private val chatUsername: TextView = itemView.findViewById(R.id.chatUsername)
+        private val chatLastMessage: TextView = itemView.findViewById(R.id.chatLastMessage)
+        private val unreadMark: View = itemView.findViewById(R.id.unreadMark) // Changed to View
+
+        fun bind(user: User) {
+            chatUsername.text = user.username
+            chatLastMessage.text = user.lastMessage
+
+            // Set unread message styling
+            if (user.unread) {
+                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white)) // or any color for unread messages
+                unreadMark.visibility = View.VISIBLE
+            } else {
+                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white_60)) // or any color for read messages
+                unreadMark.visibility = View.GONE
+            }
+
+            if (user.avatarUrl != null) {
+                Glide.with(itemView.context)
+                    .load(user.avatarUrl)
+                    .transform(CircleCrop())
+                    .into(chatProfilePic)
+            }
+        }
+    }
 }

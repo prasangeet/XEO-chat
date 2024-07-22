@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
@@ -84,6 +85,8 @@ class MainActivity : AppCompatActivity() {
                                 .transform(CircleCrop())
                                 .into(profileImageView)
                         }
+                    } else {
+                        Log.d("MainActivity", "Current user document does not exist.")
                     }
                 }.addOnFailureListener { exception ->
                     Toast.makeText(this, "Failed to Load Image and Username: ${exception.message}", Toast.LENGTH_SHORT).show()
@@ -114,19 +117,41 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadLastMessage(user: User) {
         val chatId = getChatId(auth.currentUser!!.uid, user.uid)
-        firestore.collection("chats").document(chatId).collection("messages")
-            .orderBy("timestamp", Query.Direction.DESCENDING).limit(1)
+        val messagesRef = firestore.collection("chats").document(chatId).collection("messages")
+
+        messagesRef
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
             .addSnapshotListener { messagesSnapshot, exception ->
                 if (exception != null) {
-                    Toast.makeText(this, "Failed to Load Last Message: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    Log.e("MainActivity", "Failed to load last message: ${exception.message}")
+                    user.lastMessage = "Error fetching message"
+                    user.unread = false
+
+                    // Update the list and adapter
+                    val index = userList.indexOfFirst { it.uid == user.uid }
+                    if (index != -1) {
+                        userList[index] = user
+                    } else {
+                        userList.add(user)
+                    }
+                    filterUsers(searchEditText.text.toString())
                     return@addSnapshotListener
                 }
 
                 if (messagesSnapshot == null || messagesSnapshot.isEmpty) {
                     user.lastMessage = "No messages yet"
+                    user.unread = false
+                    Log.d("MainActivity", "No messages found for user: ${user.uid}")
                 } else {
                     val lastMessageDoc = messagesSnapshot.documents[0]
+
                     val encryptedMessage = lastMessageDoc.getString("message") ?: "No message"
+                    val isSeen = lastMessageDoc.getBoolean("seen") ?: true
+                    val isDelivered = lastMessageDoc.getBoolean("delivered") ?: false
+                    val timestamp = lastMessageDoc.getLong("timestamp") ?: System.currentTimeMillis()
+
+                    Log.d("MainActivity", "Retrieved message: $encryptedMessage")
 
                     // Decrypt the message
                     val decryptedMessage = try {
@@ -136,9 +161,12 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     user.lastMessage = decryptedMessage
+                    user.unread = !isSeen
+                    Log.d("MainActivity", "Decrypted message: $decryptedMessage")
+                    Log.d("MainActivity", "Message seen status: $isSeen")
                 }
 
-                // Update the list
+                // Update the list and adapter
                 val index = userList.indexOfFirst { it.uid == user.uid }
                 if (index != -1) {
                     userList[index] = user
@@ -149,8 +177,9 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
+
     private fun getChatId(currentUserId: String, otherUserId: String): String {
-        return if (currentUserId < otherUserId) {
+        return if (currentUserId > otherUserId) {
             "$currentUserId-$otherUserId"
         } else {
             "$otherUserId-$currentUserId"

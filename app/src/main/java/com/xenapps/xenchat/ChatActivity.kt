@@ -35,7 +35,6 @@ class ChatActivity : AppCompatActivity() {
 
     private lateinit var chatId: String
 
-    // Use EncryptionUtils methods to get public and private keys
     private val publicKey by lazy { EncryptionUtils.getPublicKey() }
     private val privateKey by lazy { EncryptionUtils.getPrivateKey() }
 
@@ -43,7 +42,6 @@ class ChatActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
 
-        // Initialize views
         chatRecyclerView = findViewById(R.id.chatRecyclerView)
         messageInput = findViewById(R.id.messageInput)
         sendButton = findViewById(R.id.sendButton)
@@ -51,27 +49,25 @@ class ChatActivity : AppCompatActivity() {
         userUsername = findViewById(R.id.userUsername)
         backIcon = findViewById(R.id.backIcon)
 
-        // Initialize Firebase
         firestore = FirebaseFirestore.getInstance()
         auth = FirebaseAuth.getInstance()
 
-        // Initialize RecyclerView
         chatRecyclerView.layoutManager = LinearLayoutManager(this)
-        messageAdapter = MessageAdapter(emptyList())
-        chatRecyclerView.adapter = messageAdapter
 
-        // Load user data and messages
         val userUid = intent.getStringExtra("USER_UID")
         if (userUid != null) {
             chatId = getChatId(auth.currentUser!!.uid, userUid)
+            messageAdapter = MessageAdapter(emptyList(), chatId)
+            chatRecyclerView.adapter = messageAdapter
+
             loadUserData(userUid)
             loadMessages()
+            setupScrollListener()
         } else {
             Toast.makeText(this, "User ID is missing", Toast.LENGTH_SHORT).show()
-            finish() // End the activity if userUid is null
+            finish()
         }
 
-        // Set up listeners
         backIcon.setOnClickListener { onBackPressed() }
         sendButton.setOnClickListener { sendMessage() }
     }
@@ -109,9 +105,9 @@ class ChatActivity : AppCompatActivity() {
                 val messages = snapshot?.documents?.mapNotNull { document ->
                     val encryptedMessage = document.getString("message")
                     val timestamp = document.getLong("timestamp") ?: 0L
-                    val isDelivered = document.getBoolean("isDelivered") ?: false
-                    val isSeen = document.getBoolean("isSeen") ?: false
-                    Log.d("ChatActivity", "Message: $encryptedMessage, Timestamp: $timestamp")
+                    val isDelivered = document.getBoolean("delivered") ?: false
+                    val isSeen = document.getBoolean("seen") ?: false
+                    Log.d("ChatActivity", "Message: $encryptedMessage, Timestamp: $timestamp, delivered: $isDelivered, seen: $isSeen")
                     val decryptedMessage = encryptedMessage?.let {
                         try {
                             EncryptionUtils.decryptRSA(it, privateKey).also {
@@ -133,8 +129,57 @@ class ChatActivity : AppCompatActivity() {
                 val categorizedMessages = categorizeMessagesByDate(messages)
                 messageAdapter.updateMessages(categorizedMessages)
                 chatRecyclerView.scrollToPosition(messageAdapter.itemCount - 1)
+
+                // Update 'seen' status after messages are loaded
+                markMessagesAsSeen()
             }
     }
+
+    private var chatVisible: Boolean = false
+
+    override fun onResume() {
+        super.onResume()
+        chatVisible = true
+        markMessagesAsSeen()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        chatVisible = false
+    }
+
+    private fun markMessagesAsSeen() {
+        if (!chatVisible) return
+
+        val currentUserId = auth.currentUser?.uid ?: return
+
+        firestore.collection("chats").document(chatId)
+            .collection("messages")
+            .whereEqualTo("receiverId", currentUserId)
+            .whereEqualTo("seen", false)
+            .get()
+            .addOnSuccessListener { documents ->
+                val visibleMessageIds = mutableListOf<String>()
+                for (document in documents) {
+                    val messageId = document.id
+                    visibleMessageIds.add(messageId)
+                    firestore.collection("chats").document(chatId)
+                        .collection("messages").document(messageId)
+                        .update("seen", true)
+                        .addOnFailureListener { exception ->
+                            Log.e("Firestore", "Failed to update message status: ${exception.message}")
+                        }
+                }
+                Log.d("ChatActivity", "Marked messages as seen for user ID: $currentUserId")
+
+                // Notify adapter with visible messages
+                messageAdapter.markMessagesAsSeen(visibleMessageIds)
+            }
+            .addOnFailureListener { exception ->
+                Log.e("Firestore", "Failed to get messages for update: ${exception.message}")
+            }
+    }
+
     private fun categorizeMessagesByDate(messages: List<Message>): List<Any> {
         val categorizedList = mutableListOf<Any>()
         var lastDate: String? = null
@@ -175,7 +220,9 @@ class ChatActivity : AppCompatActivity() {
                 firestore.collection("chats").document(chatId)
                     .collection("messages")
                     .add(message)
-                    .addOnSuccessListener {
+                    .addOnSuccessListener { documentReference ->
+                        Log.d("Firestore", "Message sent with ID: ${documentReference.id}")
+                        updateMessageStatus(documentReference.id)
                         messageInput.text.clear()
                     }
                     .addOnFailureListener { exception ->
@@ -189,12 +236,38 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun getChatId(currentUserId: String, otherUserId: String): String {
-        return if (currentUserId < otherUserId) {
-            "$currentUserId-$otherUserId"
-        } else {
-            "$otherUserId-$currentUserId"
-        }
+    private fun updateMessageStatus(messageId: String) {
+        val currentUserId = auth.currentUser?.uid ?: return
+
+        firestore.collection("chats").document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .update("delivered", true)
+            .addOnSuccessListener {
+                Log.d("ChatActivity", "Message status updated to Delivered for ID: $messageId")
+            }
+            .addOnFailureListener { exception ->
+                Log.e("ChatActivity", "Failed to update message status: ${exception.message}")
+            }
+    }
+
+    private fun setupScrollListener() {
+        chatRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                super.onScrollStateChanged(recyclerView, newState)
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+                    val lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition()
+                    val totalItemCount = layoutManager.itemCount
+                    if (lastVisibleItemPosition == totalItemCount - 1) {
+                        markMessagesAsSeen()
+                    }
+                }
+            }
+        })
+    }
+
+    private fun getChatId(user1: String, user2: String): String {
+        return if (user1 > user2) "$user1-$user2" else "$user2-$user1"
     }
 }
-
