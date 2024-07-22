@@ -38,6 +38,10 @@ class ChatActivity : AppCompatActivity() {
     private val publicKey by lazy { EncryptionUtils.getPublicKey() }
     private val privateKey by lazy { EncryptionUtils.getPrivateKey() }
 
+    companion object {
+        private const val FirestoreMaxMessageLength = 1000000 // Firestore document size limit in bytes
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
@@ -208,6 +212,11 @@ class ChatActivity : AppCompatActivity() {
                 val encryptedMessage = EncryptionUtils.encryptRSA(messageText, publicKey)
                 Log.d("Encryption", "Original message: $messageText")
                 Log.d("Encryption", "Encrypted message: $encryptedMessage")
+
+                if (encryptedMessage.length > FirestoreMaxMessageLength) {
+                    Toast.makeText(this, "Message too long to send", Toast.LENGTH_SHORT).show()
+                    return
+                }
 
                 val message = Message(
                     senderId = auth.currentUser!!.uid,

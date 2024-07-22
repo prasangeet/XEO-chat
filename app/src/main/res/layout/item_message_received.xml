@@ -11,6 +11,7 @@
         android:layout_height="wrap_content"
         android:background="@drawable/message_received_bg"
         android:padding="8dp"
+        android:maxWidth="300dp"
         android:textColor="@color/white" />
 
     <TextView

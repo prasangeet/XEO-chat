@@ -79,9 +79,9 @@ class MainActivity : AppCompatActivity() {
                         val username = document.getString("username")
                         val avatarUrl = document.getString("avatarUrl")
                         usernameTextView.text = username
-                        if (avatarUrl != null) {
+                        avatarUrl?.let { url ->
                             Glide.with(this)
-                                .load(avatarUrl)
+                                .load(url)
                                 .transform(CircleCrop())
                                 .into(profileImageView)
                         }
@@ -104,69 +104,54 @@ class MainActivity : AppCompatActivity() {
             }
 
             userList.clear()
-            for (document in snapshots!!.documents) {
-                val user = document.toObject<User>()
-                user?.uid = document.id
-                if (user != null && user.uid != currentUserUid) {
-                    loadLastMessage(user)
-                }
+            snapshots?.documents?.forEach { document ->
+                val user = document.toObject<User>()?.apply { uid = document.id }
+                user?.takeIf { it.uid != currentUserUid }?.let { loadLastMessage(it) }
             }
             filterUsers(searchEditText.text.toString())
         }
     }
 
     private fun loadLastMessage(user: User) {
-        val chatId = getChatId(auth.currentUser!!.uid, user.uid)
+        val currentUserUid = auth.currentUser!!.uid
+        val chatId = getChatId(currentUserUid, user.uid)
         val messagesRef = firestore.collection("chats").document(chatId).collection("messages")
 
-        messagesRef
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(1)
+        messagesRef.orderBy("timestamp", Query.Direction.DESCENDING).limit(1)
             .addSnapshotListener { messagesSnapshot, exception ->
                 if (exception != null) {
                     Log.e("MainActivity", "Failed to load last message: ${exception.message}")
                     user.lastMessage = "Error fetching message"
                     user.unread = false
-
-                    // Update the list and adapter
-                    val index = userList.indexOfFirst { it.uid == user.uid }
-                    if (index != -1) {
-                        userList[index] = user
-                    } else {
-                        userList.add(user)
-                    }
-                    filterUsers(searchEditText.text.toString())
-                    return@addSnapshotListener
-                }
-
-                if (messagesSnapshot == null || messagesSnapshot.isEmpty) {
+                } else if (messagesSnapshot == null || messagesSnapshot.isEmpty) {
                     user.lastMessage = "No messages yet"
                     user.unread = false
                     Log.d("MainActivity", "No messages found for user: ${user.uid}")
                 } else {
                     val lastMessageDoc = messagesSnapshot.documents[0]
-
                     val encryptedMessage = lastMessageDoc.getString("message") ?: "No message"
                     val isSeen = lastMessageDoc.getBoolean("seen") ?: true
-                    val isDelivered = lastMessageDoc.getBoolean("delivered") ?: false
-                    val timestamp = lastMessageDoc.getLong("timestamp") ?: System.currentTimeMillis()
+                    val senderId = lastMessageDoc.getString("senderId") ?: currentUserUid
 
                     Log.d("MainActivity", "Retrieved message: $encryptedMessage")
 
-                    // Decrypt the message
-                    val decryptedMessage = try {
+                    user.lastMessage = try {
                         EncryptionUtils.decryptRSA(encryptedMessage, EncryptionUtils.getPrivateKey())
                     } catch (e: Exception) {
                         "Decryption error"
                     }
 
-                    user.lastMessage = decryptedMessage
-                    user.unread = !isSeen
-                    Log.d("MainActivity", "Decrypted message: $decryptedMessage")
-                    Log.d("MainActivity", "Message seen status: $isSeen")
+                    // Format the last message string
+                    user.lastMessage = if (senderId == currentUserUid) {
+                        "You: ${user.lastMessage}"
+                    } else {
+                        "${user.username}: ${user.lastMessage}"
+                    }
+
+                    user.unread = (senderId != currentUserUid) && !isSeen
+                    Log.d("MainActivity", "Decrypted message: ${user.lastMessage}")
                 }
 
-                // Update the list and adapter
                 val index = userList.indexOfFirst { it.uid == user.uid }
                 if (index != -1) {
                     userList[index] = user
@@ -176,7 +161,6 @@ class MainActivity : AppCompatActivity() {
                 filterUsers(searchEditText.text.toString())
             }
     }
-
 
     private fun getChatId(currentUserId: String, otherUserId: String): String {
         return if (currentUserId > otherUserId) {
@@ -211,11 +195,7 @@ class MainActivity : AppCompatActivity() {
         if (lowercaseQuery.isEmpty()) {
             filteredUserList.addAll(userList)
         } else {
-            for (user in userList) {
-                if (user.username.lowercase(Locale.getDefault()).contains(lowercaseQuery)) {
-                    filteredUserList.add(user)
-                }
-            }
+            filteredUserList.addAll(userList.filter { it.username.lowercase(Locale.getDefault()).contains(lowercaseQuery) })
         }
         userAdapter.notifyDataSetChanged()
         nothingFoundLayout.visibility = if (filteredUserList.isEmpty()) View.VISIBLE else View.GONE

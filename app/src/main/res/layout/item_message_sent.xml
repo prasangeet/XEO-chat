@@ -11,6 +11,7 @@
         android:layout_height="wrap_content"
         android:background="@drawable/message_sent_bg"
         android:padding="8dp"
+        android:maxWidth="300dp"
         android:layout_alignParentEnd="true"
         android:textColor="@color/white" />
 
