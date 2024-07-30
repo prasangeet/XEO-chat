@@ -40,7 +40,19 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="@color/white"
-        android:textSize="20sp"
+        android:textSize="30sp"
         android:text="*"
-        android:visibility="gone"/>
+        android:gravity="center"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        android:textAlignment="center"/>
+
+    <ImageView
+        android:id="@+id/favoriteIcon"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="center"
+        android:clickable="true"
+        android:src="@drawable/star_empty"
+        android:contentDescription="Favorite Icon" />
 </LinearLayout>

@@ -12,7 +12,9 @@ import com.xenapps.xenchat.R
 
 class UserAdapter(
     private val userList: List<User>,
-    private val onUserClick: (User) -> Unit
+    private val onUserClick: (User) -> Unit,
+    private val onFavoriteClick: (User) -> Unit, // Add this parameter
+    private val favoriteUserIds: List<String>
 ) : RecyclerView.Adapter<UserAdapter.UserViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
@@ -24,6 +26,7 @@ class UserAdapter(
         val user = userList[position]
         holder.bind(user)
         holder.itemView.setOnClickListener { onUserClick(user) }
+        holder.favouriteIcon.setOnClickListener { onFavoriteClick(user) } // Set favorite icon click listener
     }
 
     override fun getItemCount(): Int = userList.size
@@ -32,7 +35,8 @@ class UserAdapter(
         private val chatProfilePic: ImageView = itemView.findViewById(R.id.chatProfilePic)
         private val chatUsername: TextView = itemView.findViewById(R.id.chatUsername)
         private val chatLastMessage: TextView = itemView.findViewById(R.id.chatLastMessage)
-        private val unreadMark: View = itemView.findViewById(R.id.unreadMark) // Changed to View
+        private val unreadMark: View = itemView.findViewById(R.id.unreadMark)
+        val favouriteIcon: ImageView = itemView.findViewById(R.id.favoriteIcon)
 
         fun bind(user: User) {
             chatUsername.text = user.username
@@ -40,10 +44,10 @@ class UserAdapter(
 
             // Set unread message styling
             if (user.unread) {
-                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white)) // or any color for unread messages
+                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white))
                 unreadMark.visibility = View.VISIBLE
             } else {
-                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white_60)) // or any color for read messages
+                chatLastMessage.setTextColor(itemView.context.getColor(R.color.white_60))
                 unreadMark.visibility = View.GONE
             }
 
@@ -52,6 +56,12 @@ class UserAdapter(
                     .load(user.avatarUrl)
                     .transform(CircleCrop())
                     .into(chatProfilePic)
+            }
+
+            if (favoriteUserIds.contains(user.uid)) {
+                favouriteIcon.setImageResource(R.drawable.star_filled)
+            } else {
+                favouriteIcon.setImageResource(R.drawable.star_empty)
             }
         }
     }

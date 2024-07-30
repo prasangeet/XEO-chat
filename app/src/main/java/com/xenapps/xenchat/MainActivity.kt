@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -17,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CircleCrop
+import com.google.android.material.tabs.TabLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -37,8 +39,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var userAdapter: UserAdapter
     private lateinit var searchEditText: EditText
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+    private lateinit var tabLayout: TabLayout
     private val userList = mutableListOf<User>()
     private val filteredUserList = mutableListOf<User>()
+    private val favoriteUserIds = mutableListOf<String>()
+    private var selectedTabPosition: Int = 0
+    private lateinit var profileLayout: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,9 +52,12 @@ class MainActivity : AppCompatActivity() {
 
         initializeViews()
         loadCurrentUser()
+        loadProfile()
         setupUserListener()
+        setupTabLayout()
         setupSearchView()
         setupSwipeRefresh()
+        loadFavoriteUserIds()
     }
 
     private fun initializeViews() {
@@ -60,14 +69,24 @@ class MainActivity : AppCompatActivity() {
         nothingFoundLayout = findViewById(R.id.nothingFound)
         searchEditText = findViewById(R.id.searchUsers)
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout)
+        tabLayout = findViewById(R.id.tabLayout)
+        profileLayout = findViewById(R.id.profileLayout)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        userAdapter = UserAdapter(filteredUserList) { user ->
+        userAdapter = UserAdapter(filteredUserList, { user ->
             val intent = Intent(this, ChatActivity::class.java)
             intent.putExtra("USER_UID", user.uid)
             startActivity(intent)
-        }
+        }, { user ->
+            toggleFavorite(user)
+        }, favoriteUserIds)
         recyclerView.adapter = userAdapter
+    }
+
+    private fun loadProfile(){
+        profileLayout.setOnClickListener{
+            startActivity(Intent(this@MainActivity, ProfileActivity::class.java))
+        }
     }
 
     private fun loadCurrentUser() {
@@ -104,12 +123,30 @@ class MainActivity : AppCompatActivity() {
             }
 
             userList.clear()
+            Log.d("MainActivity", "Snapshot received with ${snapshots?.documents?.size ?: 0} users.")
             snapshots?.documents?.forEach { document ->
                 val user = document.toObject<User>()?.apply { uid = document.id }
-                user?.takeIf { it.uid != currentUserUid }?.let { loadLastMessage(it) }
+                Log.d("MainActivity", "Processing user: ${user?.username}, uid: ${user?.uid}")
+                user?.takeIf { it.uid != currentUserUid }?.let { loadedUser ->
+                    loadLastMessage(loadedUser)
+                }
             }
-            filterUsers(searchEditText.text.toString())
+            filterUsers(getCurrentFilterQuery())
         }
+    }
+
+    private fun loadFavoriteUserIds() {
+        val currentUserUid = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(currentUserUid).collection("favorites")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("MainActivity", "Failed to load favorites: ${e.message}")
+                    return@addSnapshotListener
+                }
+                favoriteUserIds.clear()
+                favoriteUserIds.addAll(snapshot?.documents?.map { it.id } ?: emptyList())
+                filterUsers(getCurrentFilterQuery())
+            }
     }
 
     private fun loadLastMessage(user: User) {
@@ -158,7 +195,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     userList.add(user)
                 }
-                filterUsers(searchEditText.text.toString())
+                filterUsers(getCurrentFilterQuery())
             }
     }
 
@@ -170,34 +207,84 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupSearchView() {
-        searchEditText.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                filterUsers(s.toString())
+    private fun filterUsers(query: String) {
+        filteredUserList.clear()
+        if (query.isEmpty() || query == "all") {
+            filteredUserList.addAll(userList)
+        } else if (query == "favorites") {
+            filteredUserList.addAll(userList.filter { favoriteUserIds.contains(it.uid) })
+        } else {
+            val lowerCaseQuery = query.toLowerCase(Locale.getDefault())
+            filteredUserList.addAll(userList.filter { it.username.toLowerCase(Locale.getDefault()).contains(lowerCaseQuery) })
+        }
+        userAdapter.notifyDataSetChanged()
+        nothingFoundLayout.visibility = if (filteredUserList.isEmpty()) View.VISIBLE else View.GONE
+        swipeRefreshLayout.isRefreshing = false
+    }
+
+    private fun toggleFavorite(user: User) {
+        val currentUserUid = auth.currentUser?.uid ?: return
+        val userRef = firestore.collection("users").document(currentUserUid).collection("favorites").document(user.uid)
+
+        userRef.get().addOnSuccessListener { document ->
+            if (document.exists()) {
+                // If the user is already in favorites, remove them
+                userRef.delete()
+                    .addOnSuccessListener {
+                        Log.d("MainActivity", "Removed ${user.username} from favorites.")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("MainActivity", "Error removing favorite: ${e.message}")
+                    }
+            } else {
+                // Add the user to favorites
+                userRef.set(mapOf("timestamp" to System.currentTimeMillis()))
+                    .addOnSuccessListener {
+                        Log.d("MainActivity", "Added ${user.username} to favorites.")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("MainActivity", "Error adding favorite: ${e.message}")
+                    }
+            }
+        }
+    }
+
+    private fun setupTabLayout() {
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                selectedTabPosition = tab.position
+                filterUsers(getCurrentFilterQuery())
             }
 
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
 
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
+    }
+
+    private fun getCurrentFilterQuery(): String {
+        return when (selectedTabPosition) {
+            0 -> searchEditText.text.toString()
+            1 -> "favorites"
+            else -> ""
+        }
+    }
+
+    private fun setupSearchView() {
+        searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(charSequence: CharSequence, i: Int, i1: Int, i2: Int) {}
+            override fun onTextChanged(charSequence: CharSequence, i: Int, i1: Int, i2: Int) {
+                filterUsers(getCurrentFilterQuery())
+            }
+
+            override fun afterTextChanged(editable: Editable) {}
         })
     }
 
     private fun setupSwipeRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
-            filterUsers(searchEditText.text.toString())
-            swipeRefreshLayout.isRefreshing = false
+            loadCurrentUser()
+            loadFavoriteUserIds()
         }
-    }
-
-    private fun filterUsers(query: String) {
-        val lowercaseQuery = query.lowercase(Locale.getDefault())
-        filteredUserList.clear()
-        if (lowercaseQuery.isEmpty()) {
-            filteredUserList.addAll(userList)
-        } else {
-            filteredUserList.addAll(userList.filter { it.username.lowercase(Locale.getDefault()).contains(lowercaseQuery) })
-        }
-        userAdapter.notifyDataSetChanged()
-        nothingFoundLayout.visibility = if (filteredUserList.isEmpty()) View.VISIBLE else View.GONE
     }
 }

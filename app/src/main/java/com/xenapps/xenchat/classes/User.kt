@@ -2,8 +2,9 @@ package com.xenapps.xenchat.classes
 
 data class User(
     var uid: String = "",
-    var username: String = "",
-    var avatarUrl: String? = null,
-    var lastMessage: String = "",
-    var unread: Boolean = false // Add this field
+    val username: String = "",
+    val avatarUrl: String? = null,
+    var lastMessage: String? = null,
+    var unread: Boolean = false, // New property
 )
+
